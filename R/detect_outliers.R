@@ -22,6 +22,61 @@ anomaly <- function(x, n = 10, method = c("hdr", "ahull"), robust = TRUE,
                         cor = TRUE)
   }
   scores <- rbt.pca$scores[,1:2] #make non-robust PCA work, prevent dimension mismatch below
+  scoreswNA <- matrix(, nrow = nc, ncol = 2)
+  scoreswNA[avl, ] <- scores[, 1:2]
+  tmp.idx <- vector(length = n)
+  if (method == "hdr") {
+    ordered <- TRUE
+    hdrinfo <- hdrcde::hdr.2d(x = scores[, 1], y = scores[, 2], 
+                              kde.package = "ks")
+    tmp.idx <- order(hdrinfo$fxy)[1:n]
+    main <- "Lowest densities on anomalies"
+  } else { # alpha hull using binary split
+    if(ordered) { # slower
+      tmp.idx <-  numeric(length=n)
+      nextout <- findnextoutlier(scores, 10, NULL, 1)
+      tmp.idx[1] <- nextout$outlier
+      if(n > 1)
+      {
+        for(i in 2:n)
+        {
+          nextout <- findnextoutlier(scores, nextout$alpha, tmp.idx[1:(i-1)])
+          tmp.idx[i] <- nextout$outlier
+        }
+      }
+    }
+    else {
+      tmp.idx <- findnextoutlier(scores, 10, NULL, n)$outlier
+    }
+    main <- "alpha-hull on anomalies"
+  }
+  idx <- avl[tmp.idx] # Put back with NA
+  if (plot) {
+    if (missing(col)) {
+      col <- c("grey", "darkblue")
+    } else {
+      lencol <- length(col)
+      if (lencol == 1L) {
+        col <- rep(col, 2)
+      } else {
+        col <- unique(col)[1:2]
+      }
+    }
+    xrange <- range(scores[, 1], na.rm = TRUE)
+    yrange <- range(scores[, 2], na.rm = TRUE)
+    plot(x = scores[-tmp.idx, 1], y = scores[-tmp.idx, 2], 
+         pch = 19, col = col[1L], xlab = "PC1", ylab = "PC2", main = main,
+         xlim = xrange, ylim = yrange)
+    points(scores[tmp.idx, 1], scores[tmp.idx, 2], 
+           col = col[2L], pch = 17)
+    if (labels & ordered) {
+      text(scores[tmp.idx, 1] + 0.3, scores[tmp.idx, 2], 
+           col = col[2L], label = 1:length(idx), cex = 1.2)
+    }
+    return(invisible(structure(list(index = idx, scores = scoreswNA))))
+  }
+  else
+    return(structure(list(index = idx, scores = scoreswNA)))
 }
 
 # Function to find the next nfind most outlying points in 2d pc space
